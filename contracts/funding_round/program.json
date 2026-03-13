@@ -1,0 +1,6 @@
+{
+  "program": "blindround_fund_v1.aleo",
+  "version": "0.1.0",
+  "description": "BlindRound - Private Funding Rounds on Aleo",
+  "license": "MIT"
+}
