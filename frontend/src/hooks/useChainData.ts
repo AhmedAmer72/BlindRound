@@ -13,7 +13,7 @@ import type { Round, Project } from '../types';
 const API = 'https://api.explorer.provable.com/v1';
 
 /** Parse a Leo AVM struct literal like { key: val, ... } into a plain JS object. */
-function parseLeoStruct(input: string): Record<string, string> {
+export function parseLeoStruct(input: string): Record<string, string> {
   const result: Record<string, string> = {};
   const inner = input.slice(input.indexOf('{') + 1, input.lastIndexOf('}'));
   // Match unquoted key: value pairs separated by commas
@@ -62,20 +62,20 @@ export interface ChainRoundInfo {
   project_count: string;
 }
 
-function statusLabel(s: string): 'active' | 'closed' | 'finalized' {
+export function statusLabel(s: string): 'active' | 'closed' | 'finalized' {
   if (s === '1u8') return 'active';
   if (s === '3u8') return 'finalized';
   return 'closed';
 }
 
 /** Parse a Leo scalar literal like "123456field", "50u64", "5u8" → number */
-function parseField(f: string): number {
+export function parseField(f: string): number {
   if (!f) return 0;
   return parseInt(f.replace(/u8|u32|u64|field/g, '')) || 0;
 }
 
 /** Convert a u32 unix timestamp like "1741908000u32" to a readable date string */
-function formatDeadline(raw: string): string {
+export function formatDeadline(raw: string): string {
   const ts = parseInt(raw.replace(/u32/g, ''));
   if (!ts || isNaN(ts)) return raw || '—';
   return new Date(ts * 1000).toLocaleDateString('en-US', {
@@ -83,7 +83,7 @@ function formatDeadline(raw: string): string {
   });
 }
 
-function chainRoundToRound(roundId: string, raw: ChainRoundInfo): Round {
+export function chainRoundToRound(roundId: string, raw: ChainRoundInfo): Round {
   return {
     id: roundId,
     fieldId: roundId,
