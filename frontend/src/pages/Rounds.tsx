@@ -10,6 +10,14 @@ export default function Rounds() {
   const [filter, setFilter] = useState<'all' | 'active' | 'closed'>('all');
   const { rounds, loading, error, refetch } = useRounds();
 
+  /** Remove a pending/failed round from localStorage and refresh the list. */
+  const handleDismiss = (roundId: string) => {
+    const ids: string[] = JSON.parse(localStorage.getItem('blindround_round_ids') ?? '[]');
+    localStorage.setItem('blindround_round_ids', JSON.stringify(ids.filter((id) => id !== roundId)));
+    localStorage.removeItem(`blindround_meta_${roundId}`);
+    refetch();
+  };
+
   // Auto-refresh every 10 s while any round is still confirming on-chain
   const hasPending = rounds.some((r) => r.pending);
   useEffect(() => {
@@ -104,7 +112,12 @@ export default function Rounds() {
       {!loading && !error && filtered.length > 0 && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map((round, i) => (
-            <RoundCard key={round.id} round={round} index={i} />
+            <RoundCard
+              key={round.id}
+              round={round}
+              index={i}
+              onDismiss={round.pending ? () => handleDismiss(round.id) : undefined}
+            />
           ))}
         </div>
       )}

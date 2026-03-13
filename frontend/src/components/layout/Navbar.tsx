@@ -12,6 +12,7 @@ import {
   Vote,
   Target,
   Plus,
+  LogOut,
 } from 'lucide-react';
 
 const NAV_LINKS = [
@@ -24,7 +25,7 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const location = useLocation();
-  const { connected, address } = useWallet();
+  const { connected, address, disconnect } = useWallet();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -108,14 +109,23 @@ export default function Navbar() {
               </Link>
             )}
 
-            <div className="hidden sm:block">
-              <WalletMultiButton />
-            </div>
-
-            {connected && (
-              <div className="hidden items-center gap-2 rounded-lg border border-white/[0.06] bg-br-surface/50 px-3 py-1.5 text-xs font-mono text-white/40 lg:flex">
-                <div className="h-2 w-2 rounded-full bg-br-green animate-pulse" />
-                {shortAddr}
+            {connected ? (
+              <div className="hidden sm:flex items-center gap-2">
+                <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-br-surface/50 px-3 py-1.5 text-xs font-mono text-white/40">
+                  <div className="h-2 w-2 rounded-full bg-br-green animate-pulse" />
+                  {shortAddr}
+                </div>
+                <button
+                  onClick={() => void disconnect()}
+                  title="Disconnect wallet"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.06] text-white/30 transition-colors hover:border-br-red/30 hover:bg-br-red/10 hover:text-br-red"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="hidden sm:block">
+                <WalletMultiButton />
               </div>
             )}
 
@@ -157,8 +167,24 @@ export default function Navbar() {
                   </Link>
                 );
               })}
-              <div className="mt-2 border-t border-white/[0.04] pt-3">
-                <WalletMultiButton />
+              <div className="mt-2 border-t border-white/[0.04] pt-3 flex items-center gap-2">
+                {connected ? (
+                  <>
+                    <div className="flex flex-1 items-center gap-2 rounded-lg border border-white/[0.06] bg-br-surface/50 px-3 py-2 text-xs font-mono text-white/40">
+                      <div className="h-2 w-2 rounded-full bg-br-green animate-pulse" />
+                      {shortAddr}
+                    </div>
+                    <button
+                      onClick={() => void disconnect()}
+                      title="Disconnect wallet"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.06] text-white/30 hover:border-br-red/30 hover:bg-br-red/10 hover:text-br-red transition-colors"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : (
+                  <WalletMultiButton />
+                )}
               </div>
             </nav>
           </motion.div>

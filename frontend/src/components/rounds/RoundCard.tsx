@@ -1,18 +1,20 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Users, Target, Clock, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
+import { Users, Target, Clock, ArrowRight, CheckCircle2, Loader2, AlertTriangle, X } from 'lucide-react';
 import ProgressBar from '../ui/ProgressBar';
 import type { Round } from '../../types';
 
 interface Props {
   round: Round;
   index?: number;
+  onDismiss?: () => void;
 }
 
-export default function RoundCard({ round, index = 0 }: Props) {
+export default function RoundCard({ round, index = 0, onDismiss }: Props) {
   const pct = round.goal > 0 ? (round.raised / round.goal) * 100 : 0;
   const isClosed = round.status === 'closed' || round.status === 'finalized';
   const isPending = !!round.pending;
+  const isFailed = !!round.failed;
 
   const cardInner = (
     <div className={`glass-card glow-border relative overflow-hidden p-6 transition-all duration-500 ${
@@ -21,9 +23,27 @@ export default function RoundCard({ round, index = 0 }: Props) {
       {/* Status badge */}
       <div className="mb-4 flex items-center justify-between">
         {isPending ? (
-          <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-yellow-500/10 text-yellow-400">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Confirming…
+          <div className="flex items-center gap-2">
+            {isFailed ? (
+              <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-br-red/10 text-br-red">
+                <AlertTriangle className="h-3 w-3" />
+                Failed
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-yellow-500/10 text-yellow-400">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Confirming…
+              </div>
+            )}
+            {(isFailed || isPending) && onDismiss && (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDismiss(); }}
+                title="Dismiss"
+                className="flex h-5 w-5 items-center justify-center rounded-full text-white/20 hover:bg-white/[0.06] hover:text-white/50 transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
         ) : (
           <div

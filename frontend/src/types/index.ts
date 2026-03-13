@@ -14,6 +14,8 @@ export interface Round {
   projects: Project[];
   /** True when the TX is submitted but not yet confirmed on-chain */
   pending?: boolean;
+  /** True when the TX was broadcast but not found on-chain after the grace period */
+  failed?: boolean;
   /** TX id returned by the wallet, used for status polling */
   txId?: string;
 }

@@ -137,6 +137,19 @@ export function useRounds() {
               name: string; description: string; goal: number;
               matchingPool: number; deadline: string; txId?: string;
             };
+
+            // Check whether the TX has failed: after 5 minutes, probe the
+            // transaction endpoint. If it returns 404, the TX was rejected.
+            let failed = false;
+            const createdAt = parseInt(rid.replace('field', ''), 10) || 0;
+            const ageMs = Date.now() - createdAt;
+            if (ageMs > 5 * 60 * 1000 && meta.txId) {
+              try {
+                const txRes = await fetch(`${API}/testnet/transaction/${meta.txId}`);
+                if (!txRes.ok) failed = true;
+              } catch { failed = true; }
+            }
+
             return {
               id: rid, fieldId: rid,
               name: meta.name || 'Round (confirming…)',
@@ -145,7 +158,7 @@ export function useRounds() {
               matchingPool: meta.matchingPool || 0, donorCount: 0,
               projectCount: 0, deadline: meta.deadline || '—',
               status: 'active' as const, creator: '', projects: [],
-              pending: true, txId: meta.txId,
+              pending: true, failed, txId: meta.txId,
             };
           }
 
