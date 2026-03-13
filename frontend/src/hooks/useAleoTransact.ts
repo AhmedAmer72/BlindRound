@@ -53,8 +53,9 @@ export function useAleoTransact() {
   );
 
   const donate = useCallback(
-    (amount: string, roundId: string, projectId: string, salt: string) =>
+    (creditsRecord: string, amount: string, roundId: string, projectId: string, salt: string) =>
       execute(PROGRAMS.FUNDING_ROUND, 'donate', [
+        creditsRecord,
         amount,
         roundId,
         projectId,

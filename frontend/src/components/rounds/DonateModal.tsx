@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Shield, Lock, Loader2 } from 'lucide-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import Modal from '../ui/Modal';
 import { useAleoTransact } from '../../hooks/useAleoTransact';
 import type { Project } from '../../types';
@@ -17,14 +18,27 @@ export default function DonateModal({ open, onClose, roundId, project }: Props) 
   const [showAmount, setShowAmount] = useState(false);
   const [step, setStep] = useState<'input' | 'confirm' | 'success'>('input');
   const { donate, loading, error, txId } = useAleoTransact();
+  const { requestRecords } = useWallet();
 
   const handleDonate = async () => {
     if (!amount || !project) return;
     setStep('confirm');
 
+    // Fetch the user's private credits records from Shield Wallet
+    let creditsRecord = '';
+    try {
+      const records = await requestRecords?.('credits.aleo');
+      if (!records || records.length === 0) throw new Error('No credits records found in wallet');
+      // Pick the first unspent record; Shield Wallet returns unspent records first
+      creditsRecord = JSON.stringify(records[0]);
+    } catch (e: any) {
+      setStep('input');
+      return;
+    }
+
     const salt = `${Date.now()}field`;
     const amountStr = `${amount}u64`;
-    const result = await donate(amountStr, roundId, project.fieldId, salt);
+    const result = await donate(creditsRecord, amountStr, roundId, project.fieldId, salt);
 
     if (result) {
       setStep('success');

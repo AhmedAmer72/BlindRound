@@ -6,6 +6,8 @@
 // ║  Leo 3.4.0  ·  @noupgrade                                               ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
+import credits.aleo;
+
 program blindround_proto.aleo {
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -239,12 +241,16 @@ program blindround_proto.aleo {
         Mapping::set(rounds, round_id, updated);
     }
 
+    // Donor spends a private credits record — real on-chain token transfer.
+    // `amount` microcredits are moved from donor's private balance to the
+    // program's public custody; change is returned as a new credits record.
     async transition donate(
+        private cr:         credits.aleo/credits,
         private amount:     u64,
         public  round_id:   field,
         public  project_id: field,
         private salt:       field,
-    ) -> (DonationReceipt, Future) {
+    ) -> (DonationReceipt, credits.aleo/credits, Future) {
         assert(amount > 0u64);
         let nonce_hash: field = BHP256::hash_to_field(salt);
         let receipt: DonationReceipt = DonationReceipt {
@@ -254,16 +260,22 @@ program blindround_proto.aleo {
             project_id: project_id,
             nonce_hash: nonce_hash,
         };
-        return (receipt, finalize_donate(round_id, project_id, amount));
+        // Transfer `amount` microcredits from donor to program address (custody)
+        let (change, pay_fut): (credits.aleo/credits, Future) =
+            credits.aleo/transfer_private_to_public(cr, self.address, amount);
+        return (receipt, change, finalize_donate(pay_fut, round_id, project_id, amount));
     }
 
     async function finalize_donate(
+        pay_fut:    Future,
         round_id:   field,
         project_id: field,
         amount:     u64,
     ) {
         let info: RoundInfo = Mapping::get(rounds, round_id);
         assert_eq(info.status, 1u8);
+        // Settle the credits transfer atomically with state updates
+        pay_fut.await();
         let tot: u64 = Mapping::get_or_use(round_totals, round_id, 0u64);
         Mapping::set(round_totals, round_id, tot + amount);
         let dc: u32 = Mapping::get_or_use(round_donor_count, round_id, 0u32);
@@ -426,13 +438,15 @@ program blindround_proto.aleo {
     // LAYER 3 TRANSITIONS — MILESTONE-BASED ESCROW
     // ═══════════════════════════════════════════════════════════════════════
 
+    // Grantor locks grant funds into program custody before the escrow activates.
     async transition lock_grant(
+        private cr:              credits.aleo/credits,
         public  escrow_id:       field,
         public  round_id:        field,
         private total_amount:    u64,
         private recipient:       address,
         public  milestone_count: u8,
-    ) -> (EscrowReceipt, Future) {
+    ) -> (EscrowReceipt, credits.aleo/credits, Future) {
         assert(total_amount > 0u64);
         assert(milestone_count > 0u8);
         assert(milestone_count <= 10u8);
@@ -443,18 +457,23 @@ program blindround_proto.aleo {
             total_amount: total_amount,
             recipient:    recipient,
         };
-        return (receipt, finalize_lock_grant(
-            self.caller, escrow_id, round_id, total_amount, milestone_count
+        // Lock the grant amount into program's public custody
+        let (change, lock_fut): (credits.aleo/credits, Future) =
+            credits.aleo/transfer_private_to_public(cr, self.address, total_amount);
+        return (receipt, change, finalize_lock_grant(
+            lock_fut, self.caller, escrow_id, round_id, total_amount, milestone_count
         ));
     }
 
     async function finalize_lock_grant(
+        lock_fut:        Future,
         grantor:         address,
         escrow_id:       field,
         round_id:        field,
         total_amount:    u64,
         milestone_count: u8,
     ) {
+        lock_fut.await();
         let info: EscrowInfo = EscrowInfo {
             round_id:             round_id,
             grantor:              grantor,
@@ -558,26 +577,34 @@ program blindround_proto.aleo {
         Mapping::set(escrows, escrow_id, updated_escrow);
     }
 
+    // Disburse a completed milestone's payout from program custody to recipient.
+    // `payout_amount` must match the on-chain milestone definition (verified in finalize).
     async transition release_tranche(
         receipt:                EscrowReceipt,
         public milestone_id:    field,
         public milestone_index: u8,
+        public payout_amount:   u64,
     ) -> (TrancheRelease, Future) {
         let release: TrancheRelease = TrancheRelease {
             owner:           receipt.recipient,
             escrow_id:       receipt.escrow_id,
             milestone_index: milestone_index,
-            amount:          0u64,
+            amount:          payout_amount,
         };
+        // Program disburses from its own public custody to the recipient
+        let disburse_fut: Future =
+            credits.aleo/transfer_public(receipt.recipient, payout_amount);
         return (release, finalize_release_tranche(
-            receipt.escrow_id, milestone_id, milestone_index
+            disburse_fut, receipt.escrow_id, milestone_id, milestone_index, payout_amount
         ));
     }
 
     async function finalize_release_tranche(
+        disburse_fut:    Future,
         escrow_id:       field,
         milestone_id:    field,
         milestone_index: u8,
+        payout_amount:   u64,
     ) {
         let escrow: EscrowInfo = Mapping::get(escrows, escrow_id);
         assert(escrow.active);
@@ -585,7 +612,11 @@ program blindround_proto.aleo {
         assert(ms.completed);
         assert_eq(ms.escrow_id, escrow_id);
         assert_eq(ms.milestone_index, milestone_index);
-        let new_released: u64 = escrow.released + ms.amount;
+        // Verify caller isn't inflating the payout beyond what was defined
+        assert_eq(ms.amount, payout_amount);
+        // Settle the credits transfer — debits program's public custody balance
+        disburse_fut.await();
+        let new_released: u64 = escrow.released + payout_amount;
         let updated: EscrowInfo = EscrowInfo {
             round_id:             escrow.round_id,
             grantor:              escrow.grantor,
