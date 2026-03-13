@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Target,
@@ -13,7 +13,11 @@ import {
   Loader2,
   Search,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Send,
 } from 'lucide-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { FadeInUp } from '../components/ui/Animations';
 import ProgressBar from '../components/ui/ProgressBar';
 import { useEscrow } from '../hooks/useChainData';
@@ -21,14 +25,103 @@ import { useAleoTransact } from '../hooks/useAleoTransact';
 import { PROGRAM_ID } from '../utils/constants';
 
 export default function Milestones() {
+  const { connected, requestRecords } = useWallet();
   const [escrowIdInput, setEscrowIdInput] = useState('');
   const [activeEscrowId, setActiveEscrowId] = useState<string | undefined>();
   const { escrow, milestones, loading: escrowLoading } = useEscrow(activeEscrowId);
   const [provingIndex, setProvingIndex] = useState<number | null>(null);
+  const [releasingIndex, setReleasingIndex] = useState<number | null>(null);
   const [showProofModal, setShowProofModal] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<number>(0);
   const [txError, setTxError] = useState<string | null>(null);
-  const { proveMilestone } = useAleoTransact();
+
+  // Grantor setup state
+  const [grantorOpen, setGrantorOpen] = useState(false);
+  const [grantRoundId, setGrantRoundId] = useState('');
+  const [grantAmount, setGrantAmount] = useState('');
+  const [grantRecipient, setGrantRecipient] = useState('');
+  const [grantMilestoneCount, setGrantMilestoneCount] = useState('3');
+  const [creditsRecord, setCreditsRecord] = useState<string | null>(null);
+  const [escrowReceipt, setEscrowReceipt] = useState<string | null>(null);
+  const [grantTxId, setGrantTxId] = useState<string | null>(null);
+
+  // Define milestone state
+  const [defineOpen, setDefineOpen] = useState(false);
+  const [msAmount, setMsAmount] = useState('');
+  const [msDeadline, setMsDeadline] = useState('');
+
+  const { proveMilestone, lockGrant, defineMilestone, releaseTranche, loading: grantLoading } = useAleoTransact();
+
+  // Auto-fetch credits record when grantor panel opens
+  useEffect(() => {
+    if (!connected || !requestRecords || !grantorOpen) return;
+    (requestRecords as (p: string) => Promise<any[]>)('credits.aleo')
+      .then((all) => { if (all.length > 0) setCreditsRecord(JSON.stringify(all[0])); })
+      .catch(() => {});
+  }, [connected, requestRecords, grantorOpen]);
+
+  // Auto-fetch EscrowReceipt for actively loaded escrow
+  useEffect(() => {
+    if (!connected || !requestRecords || !activeEscrowId) { setEscrowReceipt(null); return; }
+    (requestRecords as (p: string) => Promise<any[]>)(PROGRAM_ID)
+      .then((all) => {
+        const r = all.find(
+          (rec: any) => rec.recordName === 'EscrowReceipt' && rec.data?.escrow_id === activeEscrowId,
+        );
+        setEscrowReceipt(r ? JSON.stringify(r) : null);
+      })
+      .catch(() => setEscrowReceipt(null));
+  }, [connected, requestRecords, activeEscrowId]);
+
+  const handleLockGrant = async () => {
+    if (!creditsRecord || !grantRoundId || !grantAmount || !grantRecipient) return;
+    const escrowId = `${Date.now()}field`;
+    const normalizedRoundId = grantRoundId.trim().endsWith('field')
+      ? grantRoundId.trim() : `${grantRoundId.trim()}field`;
+    const result = await lockGrant(
+      creditsRecord, escrowId, normalizedRoundId,
+      `${grantAmount}u64`, grantRecipient.trim(), `${grantMilestoneCount}u8`,
+    );
+    if (result) {
+      const existing: string[] = JSON.parse(localStorage.getItem('blindround_escrow_ids') ?? '[]');
+      if (!existing.includes(escrowId))
+        localStorage.setItem('blindround_escrow_ids', JSON.stringify([...existing, escrowId]));
+      setGrantTxId((result as any).transactionId ?? 'submitted');
+      setEscrowIdInput(escrowId.replace('field', ''));
+      setActiveEscrowId(escrowId);
+      setGrantorOpen(false);
+    }
+  };
+
+  const handleDefineMilestone = async () => {
+    if (!activeEscrowId || !msAmount || !msDeadline) return;
+    const milestoneId = `${Date.now()}field`;
+    const milestoneIndex = milestones.length;
+    const deadlineTs = `${Math.floor(new Date(msDeadline).getTime() / 1000)}u32`;
+    const result = await defineMilestone(
+      activeEscrowId, milestoneId, `${milestoneIndex}u8`, `${msAmount}u64`, deadlineTs,
+    );
+    if (result) {
+      const key = `blindround_milestones_${activeEscrowId}`;
+      const existing: string[] = JSON.parse(localStorage.getItem(key) ?? '[]');
+      if (!existing.includes(milestoneId))
+        localStorage.setItem(key, JSON.stringify([...existing, milestoneId]));
+      setMsAmount(''); setMsDeadline(''); setDefineOpen(false);
+    }
+  };
+
+  const handleReleaseTranche = async (milestoneId: string, idx: number, amount: number) => {
+    if (!activeEscrowId || !escrowReceipt) return;
+    setReleasingIndex(idx);
+    setTxError(null);
+    try {
+      await releaseTranche(escrowReceipt, milestoneId, `${idx}u8`, `${amount}u64`);
+    } catch (e: any) {
+      setTxError(e?.message ?? 'Release failed');
+    } finally {
+      setReleasingIndex(null);
+    }
+  };
 
   const handleLoad = () => {
     const trimmed = escrowIdInput.trim();
@@ -73,6 +166,63 @@ export default function Milestones() {
           <p className="mt-2 text-white/40">
             Prove deliverables without exposing details. Tranches release automatically.
           </p>
+        </div>
+      </FadeInUp>
+
+      {/* Grantor Setup Escrow */}
+      <FadeInUp delay={0.03}>
+        <div className="glass-card mb-6 p-6">
+          <button
+            onClick={() => setGrantorOpen(!grantorOpen)}
+            className="flex w-full items-center justify-between text-sm font-semibold text-white/60 hover:text-white/80 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <Lock className="h-4 w-4" />
+              Setup New Escrow <span className="text-white/30 font-normal">(Grantor)</span>
+            </span>
+            {grantorOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          {grantorOpen && (
+            <div className="mt-5 space-y-4 border-t border-white/[0.04] pt-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-white/40">Round ID</label>
+                  <input value={grantRoundId} onChange={(e) => setGrantRoundId(e.target.value)}
+                    placeholder="1741908000000field" className="input-field text-sm font-mono" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-white/40">Total Amount (microcredits)</label>
+                  <input type="number" value={grantAmount} onChange={(e) => setGrantAmount(e.target.value)}
+                    placeholder="1000000" className="input-field text-sm" min={1} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-white/40">Recipient Address</label>
+                  <input value={grantRecipient} onChange={(e) => setGrantRecipient(e.target.value)}
+                    placeholder="aleo1…" className="input-field text-sm font-mono" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-white/40">Milestones (1–10)</label>
+                  <input type="number" value={grantMilestoneCount} onChange={(e) => setGrantMilestoneCount(e.target.value)}
+                    placeholder="3" className="input-field text-sm" min={1} max={10} />
+                </div>
+              </div>
+              {!creditsRecord && connected && (
+                <p className="text-xs text-br-amber/70">Loading credits record from wallet…</p>
+              )}
+              {!connected && <p className="text-xs text-white/30">Connect Shield Wallet to lock a grant.</p>}
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={handleLockGrant}
+                disabled={grantLoading || !creditsRecord || !grantRoundId || !grantAmount || !grantRecipient}
+                className="btn-primary text-sm disabled:opacity-40"
+              >
+                {grantLoading ? 'Locking…' : 'Lock Grant'}
+              </motion.button>
+              {grantTxId && (
+                <p className="font-mono text-xs text-br-green break-all">✓ Escrow locked · tx: {grantTxId}</p>
+              )}
+            </div>
+          )}
         </div>
       </FadeInUp>
 
@@ -252,9 +402,28 @@ export default function Milestones() {
                         )}
 
                         {isCompleted && (
-                          <div className="flex items-center gap-1 text-xs text-br-green">
-                            <Shield className="h-3 w-3" />
-                            ZK Verified
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1 text-xs text-br-green">
+                              <Shield className="h-3 w-3" />
+                              ZK Verified
+                            </div>
+                            {escrowReceipt && releasingIndex !== idx && (
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => handleReleaseTranche(milestone.id, idx, amount)}
+                                className="flex items-center gap-1.5 rounded-lg bg-br-green/10 px-3 py-1.5 text-xs font-semibold text-br-green hover:bg-br-green/20 transition-colors"
+                              >
+                                <Send className="h-3 w-3" />
+                                Release Tranche
+                              </motion.button>
+                            )}
+                            {releasingIndex === idx && (
+                              <div className="flex items-center gap-1 text-xs text-white/40">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Releasing…
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -264,6 +433,45 @@ export default function Milestones() {
               );
             })}
           </div>
+          )}
+
+          {/* Define New Milestone */}
+          {escrow && escrow.active === 'true' && (
+            <div className="mt-6">
+              <div className="glass-card p-5">
+                <button
+                  onClick={() => setDefineOpen(!defineOpen)}
+                  className="flex w-full items-center justify-between text-xs font-semibold text-white/40 hover:text-white/60 transition-colors"
+                >
+                  <span>+ Define New Milestone</span>
+                  {defineOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+                {defineOpen && (
+                  <div className="mt-4 space-y-3 border-t border-white/[0.04] pt-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs text-white/40">Amount (microcredits)</label>
+                        <input type="number" value={msAmount} onChange={(e) => setMsAmount(e.target.value)}
+                          placeholder="100000" className="input-field text-sm" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-white/40">Deadline</label>
+                        <input type="date" value={msDeadline} onChange={(e) => setMsDeadline(e.target.value)}
+                          className="input-field text-sm" />
+                      </div>
+                    </div>
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      onClick={handleDefineMilestone}
+                      disabled={grantLoading || !msAmount || !msDeadline}
+                      className="btn-primary text-xs disabled:opacity-40"
+                    >
+                      {grantLoading ? 'Submitting…' : 'Define Milestone'}
+                    </motion.button>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
 

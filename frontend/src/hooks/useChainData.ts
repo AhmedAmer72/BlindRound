@@ -68,9 +68,19 @@ function statusLabel(s: string): 'active' | 'closed' | 'finalized' {
   return 'closed';
 }
 
-/** Parse a Leo field literal like "123456field" → number */
+/** Parse a Leo scalar literal like "123456field", "50u64", "5u8" → number */
 function parseField(f: string): number {
-  return parseInt(f.replace('field', '').replace('u64', '').replace('u32', ''));
+  if (!f) return 0;
+  return parseInt(f.replace(/u8|u32|u64|field/g, '')) || 0;
+}
+
+/** Convert a u32 unix timestamp like "1741908000u32" to a readable date string */
+function formatDeadline(raw: string): string {
+  const ts = parseInt(raw.replace(/u32/g, ''));
+  if (!ts || isNaN(ts)) return raw || '—';
+  return new Date(ts * 1000).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
 }
 
 function chainRoundToRound(roundId: string, raw: ChainRoundInfo): Round {
@@ -84,7 +94,7 @@ function chainRoundToRound(roundId: string, raw: ChainRoundInfo): Round {
     matchingPool: parseField(raw.matching_pool),
     donorCount: 0,         // populated separately from round_donor_count mapping
     projectCount: parseField(raw.project_count),
-    deadline: raw.deadline,
+    deadline: formatDeadline(raw.deadline),
     status: statusLabel(raw.status),
     creator: raw.creator,
     projects: [],

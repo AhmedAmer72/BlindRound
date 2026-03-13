@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -12,11 +12,13 @@ import {
   Award,
   RefreshCw,
 } from 'lucide-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { FadeInUp, StaggerContainer, StaggerItem } from '../components/ui/Animations';
 import ProgressBar from '../components/ui/ProgressBar';
 import AnimatedCounter from '../components/ui/AnimatedCounter';
 import DonateModal from '../components/rounds/DonateModal';
 import { useRound } from '../hooks/useChainData';
+import { useAleoTransact } from '../hooks/useAleoTransact';
 import { PROGRAM_ID } from '../utils/constants';
 import type { Project } from '../types';
 
@@ -25,6 +27,47 @@ export default function RoundDetail() {
   const { round, loading, error, refetch } = useRound(id ?? '');
   const [donateOpen, setDonateOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+
+  // Hooks must all appear before early returns
+  const { connected, requestRecords } = useWallet();
+  const { registerProject, closeRound, loading: txLoading, error: txError } = useAleoTransact();
+  const [adminRecord, setAdminRecord] = useState<string | null>(null);
+  const [projName, setProjName] = useState('');
+  const [regTxId, setRegTxId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!connected || !requestRecords || !round) { setAdminRecord(null); return; }
+    (requestRecords as (p: string) => Promise<any[]>)(PROGRAM_ID)
+      .then((all) => {
+        const rec = all.find(
+          (r: any) => r.recordName === 'RoundAdmin' && r.data?.round_id === round.fieldId,
+        );
+        setAdminRecord(rec ? JSON.stringify(rec) : null);
+      })
+      .catch(() => setAdminRecord(null));
+  }, [connected, requestRecords, round]);
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projName.trim() || !round) return;
+    const projectId = `${Date.now()}field`;
+    const nameHash = `${projName.split('').reduce((a, c) => (a + c.charCodeAt(0)) & 0xffffff, 0)}field`;
+    const result = await registerProject(round.fieldId, projectId, nameHash);
+    if (result) {
+      const key = `blindround_projects_${round.fieldId}`;
+      const existing: string[] = JSON.parse(localStorage.getItem(key) ?? '[]');
+      if (!existing.includes(projectId)) localStorage.setItem(key, JSON.stringify([...existing, projectId]));
+      setRegTxId((result as any).transactionId ?? 'ok');
+      setProjName('');
+      refetch();
+    }
+  };
+
+  const handleCloseRound = async () => {
+    if (!adminRecord) return;
+    await closeRound(adminRecord);
+    refetch();
+  };
 
   if (loading) {
     return (
@@ -121,7 +164,7 @@ export default function RoundDetail() {
                   { icon: Users, label: 'Donors', value: round.donorCount },
                   { icon: Target, label: 'Projects', value: round.projectCount },
                   { icon: TrendingUp, label: 'Match Pool', value: `$${(round.matchingPool / 1000).toFixed(0)}k` },
-                  { icon: Clock, label: 'Deadline', value: round.deadline.slice(5) },
+                  { icon: Clock, label: 'Deadline', value: round.deadline },
                 ].map(({ icon: Icon, label, value }) => (
                   <div key={label} className="text-center">
                     <Icon className="mx-auto mb-1 h-4 w-4 text-white/20" />
@@ -176,6 +219,15 @@ export default function RoundDetail() {
                   <span className="font-mono text-white/60">{round.fieldId}</span>
                 </div>
               </div>
+              {adminRecord && round.status === 'active' && (
+                <button
+                  onClick={handleCloseRound}
+                  disabled={txLoading}
+                  className="mt-4 w-full rounded-lg border border-br-red/20 bg-br-red/5 py-2 text-xs font-semibold text-br-red hover:bg-br-red/10 disabled:opacity-40 transition-colors"
+                >
+                  {txLoading ? 'Closing…' : 'Close Round'}
+                </button>
+              )}
             </div>
           </FadeInUp>
         </div>
@@ -246,6 +298,40 @@ export default function RoundDetail() {
               </StaggerItem>
             ))}
           </StaggerContainer>
+        </div>
+      )}
+
+      {/* Register Project */}
+      {round.status === 'active' && connected && (
+        <div className="mt-8">
+          <FadeInUp>
+            <div className="glass-card p-6">
+              <h3 className="mb-4 text-lg font-bold text-white">Register a Project</h3>
+              <form onSubmit={handleRegister} className="flex gap-3">
+                <input
+                  value={projName}
+                  onChange={(e) => setProjName(e.target.value)}
+                  placeholder="Project name"
+                  className="input-field flex-1"
+                  required
+                />
+                <motion.button
+                  type="submit"
+                  whileTap={{ scale: 0.97 }}
+                  disabled={!projName.trim() || txLoading}
+                  className="btn-primary shrink-0 px-5 text-sm disabled:opacity-40"
+                >
+                  {txLoading ? 'Submitting…' : 'Register'}
+                </motion.button>
+              </form>
+              {txError && <p className="mt-2 text-xs text-br-red">{txError}</p>}
+              {regTxId && (
+                <p className="mt-2 font-mono text-xs text-br-cyan break-all">
+                  ✓ Registered · tx: {regTxId}
+                </p>
+              )}
+            </div>
+          </FadeInUp>
         </div>
       )}
 

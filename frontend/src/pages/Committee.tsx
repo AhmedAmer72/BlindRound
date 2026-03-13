@@ -33,7 +33,47 @@ export default function Committee() {
   const [showScores, setShowScores] = useState(false);
   const [seatRecord, setSeatRecord] = useState<string | null>(null);
   const [noSeat, setNoSeat] = useState(false);
-  const { submitVote } = useAleoTransact();
+  const { submitVote, createCommittee, addMember, closeVoting: closeVotingFn, revealProjectScore, loading: committeeTxLoading } = useAleoTransact();
+
+  // Admin panel state
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [memberCount, setMemberCount] = useState('3');
+  const [maxScore, setMaxScore] = useState('100');
+  const [newMember, setNewMember] = useState('');
+  const [memberIdx, setMemberIdx] = useState('0');
+  const [adminTx, setAdminTx] = useState<string | null>(null);
+  const [adminErr, setAdminErr] = useState<string | null>(null);
+
+  const handleCreateCommittee = async () => {
+    if (!activeRoundId) return;
+    setAdminTx(null); setAdminErr(null);
+    const r = await createCommittee(activeRoundId, `${memberCount}u8`, `${maxScore}u8`);
+    if (r) setAdminTx((r as any).transactionId ?? 'submitted');
+    else setAdminErr('Create committee failed');
+  };
+
+  const handleAddMember = async () => {
+    if (!activeRoundId || !newMember.trim()) return;
+    setAdminTx(null); setAdminErr(null);
+    const r = await addMember(activeRoundId, newMember.trim(), `${memberIdx}u8`);
+    if (r) { setAdminTx((r as any).transactionId ?? 'submitted'); setNewMember(''); }
+    else setAdminErr('Add member failed');
+  };
+
+  const handleCloseVoting = async () => {
+    if (!activeRoundId) return;
+    setAdminTx(null); setAdminErr(null);
+    const r = await closeVotingFn(activeRoundId);
+    if (r) setAdminTx((r as any).transactionId ?? 'submitted');
+    else setAdminErr('Close voting failed');
+  };
+
+  const handleRevealAll = async () => {
+    if (!activeRoundId || projects.length === 0) return;
+    setAdminTx(null); setAdminErr(null);
+    for (const p of projects) { await revealProjectScore(activeRoundId, p.fieldId); }
+    setAdminTx('All scores queued for reveal');
+  };
 
   useEffect(() => {
     if (!activeRoundId || !requestRecords || !connected) {
@@ -394,6 +434,103 @@ export default function Committee() {
           </FadeInUp>
         </div>
       </div>
+      )}
+
+      {/* Admin Panel */}
+      {activeRoundId && (
+        <div className="mt-8">
+          <FadeInUp>
+            <div className="glass-card p-6">
+              <button
+                onClick={() => setAdminOpen(!adminOpen)}
+                className="flex w-full items-center justify-between text-sm font-semibold text-white/60 hover:text-white/80 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Committee Admin
+                </span>
+                <span className="text-xs text-white/20">{adminOpen ? '▲' : '▼'}</span>
+              </button>
+
+              {adminOpen && (
+                <div className="mt-5 space-y-5 border-t border-white/[0.04] pt-5">
+                  {/* Create Committee */}
+                  <div>
+                    <p className="mb-2 text-xs font-semibold text-white/40 uppercase tracking-wide">1. Create Committee</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="number" value={memberCount}
+                        onChange={(e) => setMemberCount(e.target.value)}
+                        placeholder="Members" className="input-field w-24 text-sm" min={1} max={255}
+                      />
+                      <input
+                        type="number" value={maxScore}
+                        onChange={(e) => setMaxScore(e.target.value)}
+                        placeholder="Max score" className="input-field w-24 text-sm" min={1} max={100}
+                      />
+                      <button
+                        onClick={handleCreateCommittee}
+                        disabled={committeeTxLoading}
+                        className="btn-primary text-xs disabled:opacity-40"
+                      >
+                        Create
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Add Member */}
+                  <div>
+                    <p className="mb-2 text-xs font-semibold text-white/40 uppercase tracking-wide">2. Add Member (issues CommitteeSeat record)</p>
+                    <div className="flex gap-2">
+                      <input
+                        value={newMember}
+                        onChange={(e) => setNewMember(e.target.value)}
+                        placeholder="aleo1… member address"
+                        className="input-field flex-1 text-sm font-mono"
+                      />
+                      <input
+                        type="number" value={memberIdx}
+                        onChange={(e) => setMemberIdx(e.target.value)}
+                        placeholder="Index" className="input-field w-20 text-sm" min={0}
+                      />
+                      <button
+                        onClick={handleAddMember}
+                        disabled={committeeTxLoading || !newMember.trim()}
+                        className="btn-primary text-xs disabled:opacity-40"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Close Voting + Reveal Scores */}
+                  <div>
+                    <p className="mb-2 text-xs font-semibold text-white/40 uppercase tracking-wide">3. Finalize</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleCloseVoting}
+                        disabled={committeeTxLoading}
+                        className="rounded-lg border border-br-amber/20 bg-br-amber/5 px-4 py-2 text-xs font-semibold text-br-amber hover:bg-br-amber/10 disabled:opacity-40 transition-colors"
+                      >
+                        Close Voting
+                      </button>
+                      <button
+                        onClick={handleRevealAll}
+                        disabled={committeeTxLoading || projects.length === 0}
+                        className="rounded-lg border border-br-cyan/20 bg-br-cyan/5 px-4 py-2 text-xs font-semibold text-br-cyan hover:bg-br-cyan/10 disabled:opacity-40 transition-colors"
+                      >
+                        Reveal All Scores
+                      </button>
+                    </div>
+                  </div>
+
+                  {adminErr && <p className="text-xs text-br-red">{adminErr}</p>}
+                  {adminTx && <p className="font-mono text-xs text-br-green break-all">✓ {adminTx}</p>}
+                </div>
+              )}
+            </div>
+          </FadeInUp>
+        </div>
       )}
     </div>
   );
