@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Vote,
@@ -13,12 +13,15 @@ import {
   Loader2,
   Search,
 } from 'lucide-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { FadeInUp, StaggerContainer, StaggerItem } from '../components/ui/Animations';
 import ProgressBar from '../components/ui/ProgressBar';
 import { useAleoTransact } from '../hooks/useAleoTransact';
 import { useRound } from '../hooks/useChainData';
+import { PROGRAM_ID } from '../utils/constants';
 
 export default function Committee() {
+  const { connected, requestRecords } = useWallet();
   const [roundIdInput, setRoundIdInput] = useState('');
   const [activeRoundId, setActiveRoundId] = useState<string | undefined>();
   const { round, loading: roundLoading, error: roundError } = useRound(activeRoundId);
@@ -28,7 +31,31 @@ export default function Committee() {
   const [submitted, setSubmitted] = useState<Set<string>>(new Set());
   const [txError, setTxError] = useState<string | null>(null);
   const [showScores, setShowScores] = useState(false);
+  const [seatRecord, setSeatRecord] = useState<string | null>(null);
+  const [noSeat, setNoSeat] = useState(false);
   const { submitVote } = useAleoTransact();
+
+  useEffect(() => {
+    if (!activeRoundId || !requestRecords || !connected) {
+      setSeatRecord(null);
+      setNoSeat(false);
+      return;
+    }
+    setSeatRecord(null);
+    setNoSeat(false);
+    (requestRecords as (p: string) => Promise<any[]>)(PROGRAM_ID)
+      .then((all) => {
+        const seat = all.find(
+          (r: any) => r.recordName === 'CommitteeSeat' && r.data?.round_id === activeRoundId,
+        );
+        if (seat) {
+          setSeatRecord(JSON.stringify(seat));
+        } else {
+          setNoSeat(true);
+        }
+      })
+      .catch(() => setNoSeat(true));
+  }, [activeRoundId, requestRecords, connected]);
 
   const handleLoad = () => {
     const trimmed = roundIdInput.trim();
@@ -40,14 +67,12 @@ export default function Committee() {
   };
 
   const handleVote = async () => {
-    if (!selectedProject || score === 0 || !activeRoundId) return;
+    if (!selectedProject || score === 0 || !activeRoundId || !seatRecord) return;
     setSubmitting(true);
     setTxError(null);
     try {
-      // seatRecord placeholder — real usage requires a CommitteeSeat record from wallet
-      const seatRecord = `{ round_id: ${activeRoundId}, owner: self.caller }`;
-      const salt = `${Date.now()}u64`;
-      await submitVote(seatRecord, `${score}u64`, selectedProject, salt);
+      const salt = `${Date.now()}field`;
+      await submitVote(seatRecord, `${score}u8`, selectedProject, salt);
       setSubmitted((prev) => new Set(prev).add(selectedProject));
       setSelectedProject(null);
       setScore(0);
@@ -96,6 +121,13 @@ export default function Committee() {
           </motion.button>
         </div>
       </FadeInUp>
+
+      {noSeat && activeRoundId && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-br-amber/20 bg-br-amber/5 px-4 py-3 text-xs text-white/50">
+          <AlertCircle className="h-4 w-4 shrink-0 text-br-amber" />
+          No CommitteeSeat record found for this round in your wallet. You must be added as a member by the round admin.
+        </div>
+      )}
 
       {txError && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-br-red/20 bg-br-red/5 px-4 py-3 text-xs text-br-red">

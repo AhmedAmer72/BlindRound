@@ -12,6 +12,21 @@ import type { Round, Project } from '../types';
 
 const API = 'https://api.explorer.provable.com/v1';
 
+/** Parse a Leo AVM struct literal like { key: val, ... } into a plain JS object. */
+function parseLeoStruct(input: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const inner = input.slice(input.indexOf('{') + 1, input.lastIndexOf('}'));
+  // Match unquoted key: value pairs separated by commas
+  const kvRegex = /([\w]+)\s*:\s*([^\n,}]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = kvRegex.exec(inner)) !== null) {
+    const key = m[1].trim();
+    const value = m[2].trim();
+    if (key) result[key] = value;
+  }
+  return result;
+}
+
 async function getMapping<T>(
   mapping: string,
   key: string,
@@ -22,10 +37,15 @@ async function getMapping<T>(
     );
     if (!res.ok) return null;
     const text = await res.text();
-    // Strip outer quotes if string value
+    // Strip outer JSON quotes
     const cleaned = text.replace(/^"|"$/g, '').trim();
     if (!cleaned || cleaned === 'null') return null;
-    return JSON.parse(cleaned) as T;
+    // Leo struct: { key: value, ... } — parse into a plain object
+    if (cleaned.startsWith('{')) {
+      return parseLeoStruct(cleaned) as unknown as T;
+    }
+    // Scalar (u8, u32, u64, field, address, bool) — return raw string
+    return cleaned as unknown as T;
   } catch {
     return null;
   }
@@ -92,17 +112,8 @@ export function useRounds() {
         localStorage.getItem('blindround_round_ids') ?? '[]',
       );
 
-      // Also check the global_round_count to determine expected count
-      const countRaw = await getMapping<string>('global_round_count', '0u8');
-      const count = countRaw ? parseInt(countRaw.replace('u32', '')) : 0;
-
-      // Try sequential field keys 1..count
-      const fromChain: string[] = [];
-      for (let i = 1; i <= count; i++) {
-        fromChain.push(`${i}field`);
-      }
-
-      const allIds = Array.from(new Set([...storedIds, ...fromChain]));
+      // Round IDs are Date.now()-based field literals, so enumerate only from localStorage
+      const allIds = storedIds;
 
       const results = await Promise.all(
         allIds.map(async (rid) => {

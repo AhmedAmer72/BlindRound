@@ -54,7 +54,7 @@ export default function Milestones() {
       // evidenceHash and deliverableHash are submitted as field literals
       const evidenceHash = `${Date.now()}field`;
       const deliverableHash = `${Date.now() + 1}field`;
-      await proveMilestone(evidenceHash, deliverableHash, activeEscrowId, milestoneId, `${idx}u32`);
+      await proveMilestone(evidenceHash, deliverableHash, activeEscrowId, milestoneId, `${idx}u8`);
       setShowProofModal(true);
     } catch (e: any) {
       setTxError(e?.message ?? 'Proof submission failed');

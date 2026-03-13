@@ -25,7 +25,13 @@ export default function CreateRoundForm() {
     const matchStr = `${form.matchingPool || '0'}u64`;
 
     const result = await createRound(roundId, goalStr, deadlineStr, matchStr);
-    if (result) setSubmitted(true);
+    if (result) {
+      const existing: string[] = JSON.parse(localStorage.getItem('blindround_round_ids') ?? '[]');
+      if (!existing.includes(roundId)) {
+        localStorage.setItem('blindround_round_ids', JSON.stringify([...existing, roundId]));
+      }
+      setSubmitted(true);
+    }
   };
 
   if (submitted) {

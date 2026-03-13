@@ -1,11 +1,3 @@
-// ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  BlindRound — Private Grants Protocol                                   ║
-// ║  Layer 1: Private Funding Round                                         ║
-// ║  Layer 2: Anonymous Committee Voting                                    ║
-// ║  Layer 3: Milestone-Based Escrow                                        ║
-// ║  Leo 3.4.0  ·  @noupgrade                                               ║
-// ╚══════════════════════════════════════════════════════════════════════════╝
-
 import credits.aleo;
 
 program blindround_proto.aleo {
