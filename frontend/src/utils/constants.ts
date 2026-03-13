@@ -1,5 +1,5 @@
 // ─── Program ID ────────────────────────────────────────────────────
-export const PROGRAM_ID = 'blindround_v1.aleo' as const;
+export const PROGRAM_ID = 'blindround_proto.aleo' as const;
 
 // Backwards-compat aliases (all point to same combined program)
 export const PROGRAMS = {

@@ -1,5 +1,5 @@
 /**
- * useChainData — fetch live on-chain data from blindround_v1.aleo mappings
+ * useChainData — fetch live on-chain data from blindround_proto.aleo mappings
  * via the Aleo Testnet REST API (no mock data).
  *
  * Endpoints used:
