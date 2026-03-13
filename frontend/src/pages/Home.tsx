@@ -65,11 +65,11 @@ export default function Home() {
           <div className="absolute right-1/4 bottom-1/4 h-[400px] w-[400px] rounded-full bg-br-purple/[0.04] blur-[120px]" />
         </div>
 
-        <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-32 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-4xl text-center">
+        <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-24 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-5xl text-center">
             {/* Badge */}
             <FadeInUp>
-              <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-br-cyan/20 bg-br-cyan/[0.06] px-4 py-1.5">
+              <div className="mb-10 inline-flex items-center gap-2 rounded-full border border-br-cyan/20 bg-br-cyan/[0.06] px-4 py-1.5">
                 <div className="h-1.5 w-1.5 rounded-full bg-br-cyan animate-pulse" />
                 <span className="text-xs font-semibold text-br-cyan">
                   Built on Aleo · Zero-Knowledge Native
@@ -79,18 +79,18 @@ export default function Home() {
 
             {/* BLIND · ROUND scramble heading */}
             <FadeInUp delay={0.1}>
-              <div className="leading-[1.05] tracking-tighter">
-                <div className="text-4xl font-black sm:text-6xl lg:text-7xl">
+              <div className="leading-none tracking-tighter">
+                <div className="text-[4rem] font-black sm:text-[6rem] lg:text-[8rem] xl:text-[10rem]">
                   <span className="text-gradient select-none font-mono">{blindText}</span>
                 </div>
-                <div className="my-3 flex items-center justify-center gap-3">
-                  <div className="h-px w-16 bg-gradient-to-r from-transparent to-br-cyan/50" />
-                  <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.25em] text-br-cyan/60">
+                <div className="my-4 flex items-center justify-center gap-4">
+                  <div className="h-px w-20 bg-gradient-to-r from-transparent to-br-cyan/50" />
+                  <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.3em] text-br-cyan/60">
                     zero · knowledge · native
                   </span>
-                  <div className="h-px w-16 bg-gradient-to-l from-transparent to-br-purple/50" />
+                  <div className="h-px w-20 bg-gradient-to-l from-transparent to-br-purple/50" />
                 </div>
-                <div className="text-4xl font-black sm:text-6xl lg:text-7xl">
+                <div className="text-[5rem] font-black sm:text-[7.5rem] lg:text-[10rem] xl:text-[13rem]">
                   <span className="select-none font-mono text-white/90">{roundText}</span>
                 </div>
               </div>
@@ -98,7 +98,7 @@ export default function Home() {
 
             {/* CTA buttons */}
             <FadeInUp delay={0.3}>
-              <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+              <div className="mt-12 flex flex-wrap items-center justify-center gap-4">
                 <Link to="/rounds">
                   <motion.button
                     whileHover={{ scale: 1.04 }}
