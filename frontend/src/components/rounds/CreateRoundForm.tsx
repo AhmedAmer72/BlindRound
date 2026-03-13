@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Loader2, CheckCircle2, AlertCircle, Rocket } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, Rocket, ArrowRight } from 'lucide-react';
 import { useAleoTransact } from '../../hooks/useAleoTransact';
 
 export default function CreateRoundForm() {
+  const navigate = useNavigate();
   const { createRound, loading, error, txId } = useAleoTransact();
   const [form, setForm] = useState({
     name: '',
@@ -13,6 +15,7 @@ export default function CreateRoundForm() {
     deadline: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [createdRoundId, setCreatedRoundId] = useState<string | null>(null);
 
   const update = (key: string, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -26,10 +29,21 @@ export default function CreateRoundForm() {
 
     const result = await createRound(roundId, goalStr, deadlineStr, matchStr);
     if (result) {
+      // Save the round ID for discovery
       const existing: string[] = JSON.parse(localStorage.getItem('blindround_round_ids') ?? '[]');
       if (!existing.includes(roundId)) {
         localStorage.setItem('blindround_round_ids', JSON.stringify([...existing, roundId]));
       }
+      // Save metadata so the round shows as "pending" immediately before on-chain confirmation
+      localStorage.setItem(`blindround_meta_${roundId}`, JSON.stringify({
+        name: form.name,
+        description: form.description,
+        goal: Number(form.goal),
+        matchingPool: Number(form.matchingPool || '0'),
+        deadline: new Date(form.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        txId: (result as any).transactionId ?? null,
+      }));
+      setCreatedRoundId(roundId);
       setSubmitted(true);
     }
   };
@@ -50,16 +64,36 @@ export default function CreateRoundForm() {
           >
             <CheckCircle2 className="h-8 w-8 text-br-green" />
           </motion.div>
-          <h3 className="text-2xl font-bold text-white">Round Created!</h3>
+          <h3 className="text-2xl font-bold text-white">Round Submitted!</h3>
           <p className="mt-2 text-sm text-white/40">
-            Your funding round has been submitted to the Aleo network.
+            Transaction sent to the Aleo network. The round will appear as
+            <span className="text-br-amber font-medium"> Confirming…</span> until the block confirms (~30–90s).
           </p>
           {txId && (
-            <div className="mt-4 rounded-lg border border-white/[0.04] bg-br-surface/40 p-3">
+            <div className="mt-4 rounded-lg border border-white/[0.04] bg-br-surface/40 p-3 text-left">
               <p className="text-xs text-white/30">Transaction ID</p>
               <p className="mt-1 break-all font-mono text-xs text-br-cyan">{txId}</p>
             </div>
           )}
+          <div className="mt-6 flex flex-col gap-3">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => navigate('/rounds')}
+              className="btn-primary flex w-full items-center justify-center gap-2"
+            >
+              View Rounds
+              <ArrowRight className="h-4 w-4" />
+            </motion.button>
+            {createdRoundId && (
+              <Link
+                to={`/rounds/${createdRoundId}`}
+                className="text-xs text-white/30 hover:text-white/60 transition-colors"
+              >
+                Go to round detail page
+              </Link>
+            )}
+          </div>
         </div>
       </motion.div>
     );

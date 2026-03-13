@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Users, Target, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Users, Target, Clock, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 import ProgressBar from '../ui/ProgressBar';
 import type { Round } from '../../types';
 
@@ -12,33 +12,37 @@ interface Props {
 export default function RoundCard({ round, index = 0 }: Props) {
   const pct = round.goal > 0 ? (round.raised / round.goal) * 100 : 0;
   const isClosed = round.status === 'closed' || round.status === 'finalized';
+  const isPending = !!round.pending;
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: index * 0.1, ease: [0.22, 1, 0.36, 1] }}
-    >
-      <Link to={`/rounds/${round.id}`} className="group block">
-        <div className="glass-card glow-border relative overflow-hidden p-6 transition-all duration-500 hover:-translate-y-1">
-          {/* Status badge */}
-          <div className="mb-4 flex items-center justify-between">
-            <div
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                isClosed
-                  ? 'bg-white/[0.06] text-white/40'
-                  : 'bg-br-green/10 text-br-green'
-              }`}
-            >
-              {isClosed ? (
-                <CheckCircle2 className="h-3 w-3" />
-              ) : (
-                <div className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-              )}
-              {round.status === 'active' ? 'Active' : round.status === 'closed' ? 'Closed' : 'Finalized'}
-            </div>
-            <ArrowRight className="h-4 w-4 text-white/10 transition-all group-hover:translate-x-1 group-hover:text-br-cyan" />
+  const cardInner = (
+    <div className={`glass-card glow-border relative overflow-hidden p-6 transition-all duration-500 ${
+      isPending ? 'opacity-70 cursor-default' : 'hover:-translate-y-1'
+    }`}>
+      {/* Status badge */}
+      <div className="mb-4 flex items-center justify-between">
+        {isPending ? (
+          <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-yellow-500/10 text-yellow-400">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Confirming…
           </div>
+        ) : (
+          <div
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+              isClosed
+                ? 'bg-white/[0.06] text-white/40'
+                : 'bg-br-green/10 text-br-green'
+            }`}
+          >
+            {isClosed ? (
+              <CheckCircle2 className="h-3 w-3" />
+            ) : (
+              <div className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+            )}
+            {round.status === 'active' ? 'Active' : round.status === 'closed' ? 'Closed' : 'Finalized'}
+          </div>
+        )}
+        {!isPending && <ArrowRight className="h-4 w-4 text-white/10 transition-all group-hover:translate-x-1 group-hover:text-br-cyan" />}
+      </div>
 
           {/* Title */}
           <h3 className="mb-2 text-xl font-bold text-white transition-colors group-hover:text-gradient-cyan">
@@ -94,12 +98,28 @@ export default function RoundCard({ round, index = 0 }: Props) {
           )}
 
           {/* Hover glow effect overlay */}
-          <div className="pointer-events-none absolute -inset-px opacity-0 transition-opacity duration-500 group-hover:opacity-100">
-            <div className="absolute -top-24 right-0 h-48 w-48 rounded-full bg-br-cyan/5 blur-3xl" />
-            <div className="absolute -bottom-24 left-0 h-48 w-48 rounded-full bg-br-purple/5 blur-3xl" />
-          </div>
+          {!isPending && (
+            <div className="pointer-events-none absolute -inset-px opacity-0 transition-opacity duration-500 group-hover:opacity-100">
+              <div className="absolute -top-24 right-0 h-48 w-48 rounded-full bg-br-cyan/5 blur-3xl" />
+              <div className="absolute -bottom-24 left-0 h-48 w-48 rounded-full bg-br-purple/5 blur-3xl" />
+            </div>
+          )}
         </div>
-      </Link>
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: index * 0.1, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {isPending ? (
+        <div>{cardInner}</div>
+      ) : (
+        <Link to={`/rounds/${round.id}`} className="group block">
+          {cardInner}
+        </Link>
+      )}
     </motion.div>
   );
 }

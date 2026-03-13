@@ -128,7 +128,27 @@ export function useRounds() {
       const results = await Promise.all(
         allIds.map(async (rid) => {
           const raw = await getMapping<ChainRoundInfo>('rounds', rid);
-          if (!raw) return null;
+
+          if (!raw) {
+            // TX may still be confirming — show from localStorage metadata
+            const metaRaw = localStorage.getItem(`blindround_meta_${rid}`);
+            if (!metaRaw) return null; // no metadata, unknown ID — skip
+            const meta = JSON.parse(metaRaw) as {
+              name: string; description: string; goal: number;
+              matchingPool: number; deadline: string; txId?: string;
+            };
+            return {
+              id: rid, fieldId: rid,
+              name: meta.name || 'Round (confirming…)',
+              description: meta.description || '',
+              goal: meta.goal || 0, raised: 0,
+              matchingPool: meta.matchingPool || 0, donorCount: 0,
+              projectCount: 0, deadline: meta.deadline || '—',
+              status: 'active' as const, creator: '', projects: [],
+              pending: true, txId: meta.txId,
+            };
+          }
+
           const round = chainRoundToRound(rid, raw);
 
           // Enrich with totals

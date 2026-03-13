@@ -27,6 +27,7 @@ export function useAleoTransact() {
           program: programId,
           function: functionName,
           inputs,
+          fee: 1_000_000, // 1 credit in microcredits — required by Shield Wallet to broadcast
         });
         setTxId(result?.transactionId ?? null);
         return result;

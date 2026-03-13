@@ -12,6 +12,10 @@ export interface Round {
   status: 'active' | 'closed' | 'finalized';
   creator: string;
   projects: Project[];
+  /** True when the TX is submitted but not yet confirmed on-chain */
+  pending?: boolean;
+  /** TX id returned by the wallet, used for status polling */
+  txId?: string;
 }
 
 export interface Project {

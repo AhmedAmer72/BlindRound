@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Filter, SlidersHorizontal, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { FadeInUp } from '../components/ui/Animations';
@@ -10,8 +10,17 @@ export default function Rounds() {
   const [filter, setFilter] = useState<'all' | 'active' | 'closed'>('all');
   const { rounds, loading, error, refetch } = useRounds();
 
+  // Auto-refresh every 10 s while any round is still confirming on-chain
+  const hasPending = rounds.some((r) => r.pending);
+  useEffect(() => {
+    if (!hasPending) return;
+    const id = setInterval(refetch, 10_000);
+    return () => clearInterval(id);
+  }, [hasPending, refetch]);
+
   const filtered = rounds.filter((r) => {
     const matchSearch =
+      r.name.toLowerCase().includes(search.toLowerCase()) ||
       r.id.toLowerCase().includes(search.toLowerCase()) ||
       r.fieldId.toLowerCase().includes(search.toLowerCase());
     const matchFilter =
@@ -43,7 +52,7 @@ export default function Rounds() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by round ID..."
+              placeholder="Search rounds..."
               className="input-field pl-10"
             />
           </div>
