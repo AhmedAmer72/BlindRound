@@ -44,7 +44,10 @@ export default function Committee() {
     setSubmitting(true);
     setTxError(null);
     try {
-      await submitVote(activeRoundId, selectedProject, score);
+      // seatRecord placeholder — real usage requires a CommitteeSeat record from wallet
+      const seatRecord = `{ round_id: ${activeRoundId}, owner: self.caller }`;
+      const salt = `${Date.now()}u64`;
+      await submitVote(seatRecord, `${score}u64`, selectedProject, salt);
       setSubmitted((prev) => new Set(prev).add(selectedProject));
       setSelectedProject(null);
       setScore(0);
