@@ -1,12 +1,21 @@
 import { useCallback, useState } from 'react';
 import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { PROGRAMS } from '../utils/constants';
+import { trackTransaction } from '../utils/transactionTracker';
 
 export function useAleoTransact() {
-  const { connected, executeTransaction } = useWallet();
+  const wallet = useWallet() as any;
+  const { connected, executeTransaction } = wallet;
+
+  // Shield Wallet expose transactionStatus() to resolve shield_… temp IDs
+  // to real at1… on-chain TX IDs. Pass it into trackTransaction.
+  const walletTxStatus: ((id: string) => Promise<{ status?: string; transactionId?: string }>) | undefined =
+    wallet.transactionStatus;
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txId, setTxId] = useState<string | null>(null);
+  const [txStatus, setTxStatus] = useState<string | null>(null);
 
   const execute = useCallback(
     async (
@@ -21,25 +30,61 @@ export function useAleoTransact() {
       setLoading(true);
       setError(null);
       setTxId(null);
+      setTxStatus('Awaiting wallet approval…');
 
       try {
+        // Execute on-chain — Shield Wallet returns a temp "shield_…" ID here
         const result = await executeTransaction({
           program: programId,
           function: functionName,
           inputs,
-          fee: 1_000_000, // 1 credit in microcredits — required by Shield Wallet to broadcast
+          fee: 1_000_000,          // 1 credit in microcredits
+          privateFee: false,       // REQUIRED for Shield Wallet
         });
-        setTxId(result?.transactionId ?? null);
-        return result;
+
+        const tempId = String((result as any)?.transactionId || result);
+        console.log(`[BlindRound] TX submitted: ${tempId}`);
+
+        // Track: resolve shield_… → real at1… and poll chain until confirmed
+        const confirmation = await trackTransaction(
+          tempId,
+          setTxStatus,
+          180_000,
+          6_000,
+          walletTxStatus,
+        );
+
+        const realId = confirmation.txId || tempId;
+        setTxId(realId);
+
+        if (confirmation.status === 'rejected') {
+          setError(
+            `Transaction rejected on-chain.\n${
+              confirmation.rejectionReason || 'Finalize failed.'
+            }\nTX: ${realId.slice(0, 24)}…`,
+          );
+          return null;
+        }
+
+        if (confirmation.status === 'timeout') {
+          // Timed out but may still confirm — return with real ID so caller
+          // can save it for on-chain polling.
+          console.warn('[BlindRound] TX confirmation timed out:', realId);
+          return { transactionId: realId };
+        }
+
+        // Accepted
+        return { transactionId: realId };
       } catch (err: any) {
         const msg = err?.message || 'Transaction failed';
         setError(msg);
         return null;
       } finally {
         setLoading(false);
+        setTxStatus(null);
       }
     },
-    [connected, executeTransaction],
+    [connected, executeTransaction, walletTxStatus],
   );
 
   // ── Layer 1: Funding Round ─────────────────────────────────────────────
@@ -159,6 +204,7 @@ export function useAleoTransact() {
     loading,
     error,
     txId,
+    txStatus,
     execute,
     // Layer 1
     createRound,

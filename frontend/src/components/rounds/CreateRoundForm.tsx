@@ -6,7 +6,7 @@ import { useAleoTransact } from '../../hooks/useAleoTransact';
 
 export default function CreateRoundForm() {
   const navigate = useNavigate();
-  const { createRound, loading, error, txId } = useAleoTransact();
+  const { createRound, loading, error, txId, txStatus } = useAleoTransact();
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -29,19 +29,22 @@ export default function CreateRoundForm() {
 
     const result = await createRound(roundId, goalStr, deadlineStr, matchStr);
     if (result) {
+      // createRound waits for full on-chain confirmation and returns the
+      // real at1… TX ID (not a shield_ temp ID).
+      const confirmedTxId = (result as any).transactionId ?? null;
       // Save the round ID for discovery
       const existing: string[] = JSON.parse(localStorage.getItem('blindround_round_ids') ?? '[]');
       if (!existing.includes(roundId)) {
         localStorage.setItem('blindround_round_ids', JSON.stringify([...existing, roundId]));
       }
-      // Save metadata so the round shows as "pending" immediately before on-chain confirmation
+      // Save metadata — the round will appear as confirmed immediately
       localStorage.setItem(`blindround_meta_${roundId}`, JSON.stringify({
         name: form.name,
         description: form.description,
         goal: Number(form.goal),
         matchingPool: Number(form.matchingPool || '0'),
         deadline: new Date(form.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        txId: (result as any).transactionId ?? null,
+        txId: confirmedTxId,
       }));
       setCreatedRoundId(roundId);
       setSubmitted(true);
@@ -206,7 +209,7 @@ export default function CreateRoundForm() {
         {loading ? (
           <>
             <Loader2 className="h-5 w-5 animate-spin" />
-            Creating Round...
+            {txStatus || 'Creating Round…'}
           </>
         ) : (
           <>

@@ -130,24 +130,26 @@ export function useRounds() {
           const raw = await getMapping<ChainRoundInfo>('rounds', rid);
 
           if (!raw) {
-            // TX may still be confirming — show from localStorage metadata
+            // Show from localStorage metadata while confirming
             const metaRaw = localStorage.getItem(`blindround_meta_${rid}`);
-            if (!metaRaw) return null; // no metadata, unknown ID — skip
+            if (!metaRaw) return null;
             const meta = JSON.parse(metaRaw) as {
               name: string; description: string; goal: number;
               matchingPool: number; deadline: string; txId?: string;
             };
 
-            // Check whether the TX has failed: after 5 minutes, probe the
-            // transaction endpoint. If it returns 404, the TX was rejected.
+            // If we have a real at1… TX ID that returns 404 on-chain after
+            // 3 minutes, it was rejected/expired.
             let failed = false;
-            const createdAt = parseInt(rid.replace('field', ''), 10) || 0;
-            const ageMs = Date.now() - createdAt;
-            if (ageMs > 5 * 60 * 1000 && meta.txId) {
-              try {
-                const txRes = await fetch(`${API}/testnet/transaction/${meta.txId}`);
-                if (!txRes.ok) failed = true;
-              } catch { failed = true; }
+            if (meta.txId && meta.txId.startsWith('at1')) {
+              const createdAt = parseInt(rid.replace('field', ''), 10) || 0;
+              const ageMs = Date.now() - createdAt;
+              if (ageMs > 3 * 60 * 1000) {
+                try {
+                  const txRes = await fetch(`${API}/testnet/transaction/${meta.txId}`);
+                  if (!txRes.ok) failed = true;
+                } catch { failed = true; }
+              }
             }
 
             return {
