@@ -26,24 +26,35 @@ export default function CreateRoundForm() {
     const goalStr = `${form.goal}u64`;
     const deadlineStr = `${Math.floor(new Date(form.deadline).getTime() / 1000)}u32`;
     const matchStr = `${form.matchingPool || '0'}u64`;
+    const deadlineDate = new Date(form.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    // ── Optimistic save ───────────────────────────────────────────────────
+    // Save metadata and add round ID to localStorage BEFORE submitting the
+    // transaction so the round appears immediately in the pending list with
+    // the correct name (not just the raw field ID).
+    const existing: string[] = JSON.parse(localStorage.getItem('blindround_round_ids') ?? '[]');
+    if (!existing.includes(roundId)) {
+      localStorage.setItem('blindround_round_ids', JSON.stringify([...existing, roundId]));
+    }
+    localStorage.setItem(`blindround_meta_${roundId}`, JSON.stringify({
+      name: form.name,
+      description: form.description,
+      goal: Number(form.goal),
+      matchingPool: Number(form.matchingPool || '0'),
+      deadline: deadlineDate,
+      txId: null,   // updated below once confirmed
+    }));
 
     const result = await createRound(roundId, goalStr, deadlineStr, matchStr);
     if (result) {
-      // createRound waits for full on-chain confirmation and returns the
-      // real at1… TX ID (not a shield_ temp ID).
+      // Update metadata with the confirmed on-chain TX ID
       const confirmedTxId = (result as any).transactionId ?? null;
-      // Save the round ID for discovery
-      const existing: string[] = JSON.parse(localStorage.getItem('blindround_round_ids') ?? '[]');
-      if (!existing.includes(roundId)) {
-        localStorage.setItem('blindround_round_ids', JSON.stringify([...existing, roundId]));
-      }
-      // Save metadata — the round will appear as confirmed immediately
       localStorage.setItem(`blindround_meta_${roundId}`, JSON.stringify({
         name: form.name,
         description: form.description,
         goal: Number(form.goal),
         matchingPool: Number(form.matchingPool || '0'),
-        deadline: new Date(form.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        deadline: deadlineDate,
         txId: confirmedTxId,
       }));
       setCreatedRoundId(roundId);

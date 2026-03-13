@@ -17,21 +17,35 @@ export default function DonateModal({ open, onClose, roundId, project }: Props) 
   const [amount, setAmount] = useState('');
   const [showAmount, setShowAmount] = useState(false);
   const [step, setStep] = useState<'input' | 'confirm' | 'success'>('input');
-  const { donate, loading, error, txId } = useAleoTransact();
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const { donate, loading, error, txId, txStatus } = useAleoTransact();
   const { requestRecords } = useWallet();
 
   const handleDonate = async () => {
     if (!amount || !project) return;
+    setRequestError(null);
     setStep('confirm');
 
     // Fetch the user's private credits records from Shield Wallet
     let creditsRecord = '';
     try {
       const records = await requestRecords?.('credits.aleo');
-      if (!records || records.length === 0) throw new Error('No credits records found in wallet');
+      if (!records || records.length === 0) {
+        setRequestError(
+          'No private credits records found in your wallet. ' +
+          'Testnet credits must be in private (spendable record) form. ' +
+          'Use the Shield Wallet sync button to refresh, or convert public credits to private first.',
+        );
+        setStep('input');
+        return;
+      }
       // Pick the first unspent record; Shield Wallet returns unspent records first
       creditsRecord = JSON.stringify(records[0]);
     } catch (e: any) {
+      setRequestError(
+        (e?.message || 'Failed to fetch wallet records') +
+        ' — Make sure Shield Wallet is unlocked and synced.',
+      );
       setStep('input');
       return;
     }
@@ -50,6 +64,7 @@ export default function DonateModal({ open, onClose, roundId, project }: Props) 
   const reset = () => {
     setAmount('');
     setStep('input');
+    setRequestError(null);
     onClose();
   };
 
@@ -69,6 +84,15 @@ export default function DonateModal({ open, onClose, roundId, project }: Props) 
                 round total is updated on-chain.
               </p>
             </div>
+          </div>
+
+          {/* Private credits requirement notice */}
+          <div className="flex items-start gap-3 rounded-xl border border-br-amber/20 bg-br-amber/[0.05] p-3">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-br-amber" />
+            <p className="text-xs text-br-amber/80">
+              Requires <span className="font-semibold">private ALEO credits</span> in Shield Wallet — not just public balance.
+              If you only have public credits, use Shield Wallet to convert them to private first.
+            </p>
           </div>
 
           {/* Project info */}
@@ -118,9 +142,9 @@ export default function DonateModal({ open, onClose, roundId, project }: Props) 
             </div>
           </div>
 
-          {error && (
+          {(requestError || error) && (
             <div className="rounded-lg border border-br-red/20 bg-br-red/10 p-3 text-xs text-br-red">
-              {error}
+              {requestError || error}
             </div>
           )}
 
@@ -145,13 +169,13 @@ export default function DonateModal({ open, onClose, roundId, project }: Props) 
           </motion.div>
           <p className="mt-4 text-lg font-semibold text-white">Generating ZK Proof...</p>
           <p className="mt-2 text-sm text-white/40">
-            Your donation is being encrypted and committed to the Aleo network.
+            {txStatus || 'Your donation is being encrypted and committed to the Aleo network.'}
           </p>
           <div className="mt-4 w-full overflow-hidden rounded-full bg-br-cyan/10">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: '100%' }}
-              transition={{ duration: 8, ease: 'linear' }}
+              transition={{ duration: 120, ease: 'linear' }}
               className="h-1.5 rounded-full bg-gradient-to-r from-br-cyan to-br-purple"
             />
           </div>

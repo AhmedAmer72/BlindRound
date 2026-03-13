@@ -84,11 +84,14 @@ export function formatDeadline(raw: string): string {
 }
 
 export function chainRoundToRound(roundId: string, raw: ChainRoundInfo): Round {
+  // Merge any locally-stored metadata (name, description) saved at creation time
+  const metaRaw = localStorage.getItem(`blindround_meta_${roundId}`);
+  const meta = metaRaw ? (JSON.parse(metaRaw) as { name?: string; description?: string }) : null;
   return {
     id: roundId,
     fieldId: roundId,
-    name: `Round ${roundId}`,
-    description: '',
+    name: meta?.name || `Round ${roundId}`,
+    description: meta?.description || '',
     goal: parseField(raw.goal),
     raised: 0,             // populated separately from round_totals mapping
     matchingPool: parseField(raw.matching_pool),
